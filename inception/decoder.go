@@ -19,6 +19,7 @@ package ffjsoninception
 
 import (
 	"fmt"
+	"net"
 	"reflect"
 	"strings"
 
@@ -71,6 +72,15 @@ func handleFieldAddr(ic *Inception, name string, takeAddr bool, typ reflect.Type
 
 	umlstd := typ.Implements(unmarshalerType) || reflect.PtrTo(typ).Implements(unmarshalerType)
 
+	ipType := reflect.TypeOf(new(net.IP))
+	isIP := typ.AssignableTo(ipType) || reflect.PtrTo(typ).AssignableTo(ipType)
+
+	if isIP {
+		out += "/* Found IP. Parsing as string instead of byte slice */\n"
+		allowed := buildTokens(true, "FFTok_string", "FFTok_null")
+		out += getAllowTokens(typ.Name(), allowed...)
+	}
+
 	out += tplStr(decodeTpl["handleUnmarshaler"], handleUnmarshaler{
 		IC:                   ic,
 		Name:                 name,
@@ -79,9 +89,10 @@ func handleFieldAddr(ic *Inception, name string, takeAddr bool, typ reflect.Type
 		TakeAddr:             takeAddr || ptr,
 		UnmarshalJSONFFLexer: umlx,
 		Unmarshaler:          umlstd,
+		IPType:               isIP,
 	})
 
-	if umlx || umlstd {
+	if umlx || umlstd || isIP {
 		return out
 	}
 
@@ -189,6 +200,10 @@ func handleFieldAddr(ic *Inception, name string, takeAddr bool, typ reflect.Type
 	return out
 }
 
+func getTextHandler(ic *Inception, name string, typ reflect.Type, ptr bool) string {
+	return ""
+}
+
 func getArrayHandler(ic *Inception, name string, typ reflect.Type, ptr bool) string {
 	if typ.Kind() == reflect.Slice && typ.Elem().Kind() == reflect.Uint8 {
 		ic.OutputImports[`"encoding/base64"`] = true
@@ -227,20 +242,20 @@ sliceOrArray:
 
 	if typ.Kind() == reflect.Array {
 		return tplStr(decodeTpl["handleArray"], handleArray{
-			IC:   ic,
-			Name: name,
-			Typ:  typ,
+			IC:    ic,
+			Name:  name,
+			Typ:   typ,
 			IsPtr: ptr,
-			Ptr:  reflect.Ptr,
+			Ptr:   reflect.Ptr,
 		})
 	}
 
 	return tplStr(decodeTpl["handleSlice"], handleArray{
-		IC:   ic,
-		Name: name,
-		Typ:  typ,
+		IC:    ic,
+		Name:  name,
+		Typ:   typ,
 		IsPtr: ptr,
-		Ptr:  reflect.Ptr,
+		Ptr:   reflect.Ptr,
 	})
 }
 

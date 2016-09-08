@@ -278,7 +278,7 @@ type handleArray struct {
 	Typ             reflect.Type
 	Ptr             reflect.Kind
 	UseReflectToSet bool
-	IsPtr bool
+	IsPtr           bool
 }
 
 var handleArrayTxt = `
@@ -672,6 +672,7 @@ type handleUnmarshaler struct {
 	TakeAddr             bool
 	UnmarshalJSONFFLexer bool
 	Unmarshaler          bool
+	IPType               bool
 }
 
 var handleUnmarshalerTxt = `
@@ -732,6 +733,40 @@ var handleUnmarshalerTxt = `
 		}
 		state = fflib.FFParse_after_value
 	}
+	{{else}}
+	{{if eq .IPType true}}
+	{
+		if tok == fflib.FFTok_null {
+			{{if eq .TakeAddr true }}
+				{{.Name}} = nil
+			{{end}}
+			state = fflib.FFParse_after_value
+			goto mainparse
+		}
+
+		tbuf, err := fs.CaptureField(tok)
+		if err != nil {
+			return fs.WrapErr(err)
+		}
+
+		{{if eq .TakeAddr true }}
+		if {{.Name}} == nil {
+			{{.Name}} = new({{getType $ic .Typ.Name .Typ}})
+		}
+		{{end}}
+
+		unquoted, ok := fflib.UnquoteBytes(tbuf)
+		if ok {
+			tbuf = unquoted
+		}
+
+		err = {{.Name}}.UnmarshalText(tbuf)
+		if err != nil {
+			return fs.WrapErr(err)
+		}
+		state = fflib.FFParse_after_value
+	}
+	{{end}}
 	{{end}}
 	{{end}}
 `

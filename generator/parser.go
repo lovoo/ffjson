@@ -20,17 +20,19 @@ package generator
 import (
 	"flag"
 	"fmt"
-	"github.com/pquerna/ffjson/shared"
 	"go/ast"
 	"go/doc"
 	"go/parser"
 	"go/token"
 	"regexp"
 	"strings"
+
+	"github.com/pquerna/ffjson/shared"
 )
 
 var noEncoder = flag.Bool("noencoder", false, "Do not generate encoder functions")
 var noDecoder = flag.Bool("nodecoder", false, "Do not generate decoder functions")
+var includeMarked = flag.Bool("marked-only", false, "Include only structs doc'ed with 'ffjson:include'")
 
 type StructField struct {
 	Name string
@@ -51,6 +53,7 @@ func NewStructInfo(name string) *StructInfo {
 	}
 }
 
+var includere = regexp.MustCompile("(.*)ffjson:(\\s*)((include))(.*)")
 var skipre = regexp.MustCompile("(.*)ffjson:(\\s*)((skip)|(ignore))(.*)")
 var skipdec = regexp.MustCompile("(.*)ffjson:(\\s*)((skipdecoder)|(nodecoder))(.*)")
 var skipenc = regexp.MustCompile("(.*)ffjson:(\\s*)((skipencoder)|(noencoder))(.*)")
@@ -116,6 +119,9 @@ func ExtractStructs(inputPath string) (string, []*StructInfo, error) {
 
 	d := doc.New(pkg, f.Name.String(), doc.AllDecls)
 	for _, t := range d.Types {
+		if *includeMarked && !includere.MatchString(t.Doc) {
+			delete(structs, t.Name)
+		}
 		if skipre.MatchString(t.Doc) {
 			delete(structs, t.Name)
 		} else {
